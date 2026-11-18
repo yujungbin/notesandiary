@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>갱갱 다이어리</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+:root { color-scheme: light; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+/* Layout: 상단 날짜 머리말 → 주간 날짜 띠 → 왼쪽 줄노트 기록장 / 오른쪽 할 일 목록 (좁은 화면에서는 한 열) */
+:root {
+  --bg: #f2f4f6;
+  --surface: #fbfcfd;
+  --fg: #1b2430;
+  --muted: #5a6672;
+  --line: #d6dce2;
+  --rule: #e4e9ee;
+  --accent: #1f6f6b;
+  --accent-fg: #ffffff;
+  --accent-soft: #dcefed;
+  --warn: #9a5b00;
+  --warn-soft: #fbecd2;
+  --bad: #a32b2b;
+  --bad-soft: #f8dcdc;
+  --font-display: "Gowun Batang", "Noto Serif KR", "Apple SD Gothic Neo", serif;
+  --font-body: "IBM Plex Sans KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171c; --surface: #1a2128; --fg: #e6ebf0; --muted: #98a4af; --line: #2e3841; --rule: #252e36;
+    --accent: #5fc2bb; --accent-fg: #0d1a19; --accent-soft: #1b3533;
+    --warn: #f0b95c; --warn-soft: #3a2d14; --bad: #f08a8a; --bad-soft: #3b1f1f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171c; --surface: #1a2128; --fg: #e6ebf0; --muted: #98a4af; --line: #2e3841; --rule: #252e36;
+  --accent: #5fc2bb; --accent-fg: #0d1a19; --accent-soft: #1b3533;
+  --warn: #f0b95c; --warn-soft: #3a2d14; --bad: #f08a8a; --bad-soft: #3b1f1f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.top > div { min-width: 0; }
+.eyebrow { margin: 0; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+h1 { margin: 2px 0 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 5vw, 38px); line-height: 1.25; text-wrap: balance; }
+.sub { margin: 2px 0 0; color: var(--muted); }
+.dday { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-size: 14px; display: flex; flex-direction: column; }
+.dday b { font-family: var(--font-display); font-size: 22px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.dday span { color: var(--muted); font-size: 13px; }
+
+.banner { border: 1px solid var(--line); background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+
+.week { display: flex; align-items: stretch; gap: 6px; }
+.week .nav { flex: 0 0 auto; width: 40px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; }
+.days { flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.day { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 2px 8px; display: flex; flex-direction: column; align-items: center; gap: 0; position: relative; min-height: 62px; }
+.day .wd { font-size: 12px; color: var(--muted); }
+.day .dn { font-family: var(--font-display); font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.day .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); position: absolute; bottom: 5px; }
+.day.today .dn { color: var(--accent); }
+.day.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.day.sel .wd, .day.sel .dn { color: var(--accent-fg); }
+.day.sel .dot { background: var(--accent-fg); }
+.day.sun .wd { color: var(--bad); }
+.day.sel.sun .wd { color: var(--accent-fg); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+.panel h2 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.status { color: var(--muted); font-size: 13px; }
+
+#entryText {
+  width: 100%; display: block; min-height: 150px; resize: vertical; border: 0; border-radius: 6px; padding: 0 4px;
+  background-color: transparent; color: var(--fg);
+  font-family: var(--font-display); font-size: 17px; line-height: 34px;
+  background-image: linear-gradient(to bottom, transparent 33px, var(--rule) 33px);
+  background-size: 100% 34px; background-attachment: local;
+}
+#entryText::placeholder { color: var(--muted); }
+#entryText:disabled { opacity: 0.7; }
+
+.group { margin-top: 14px; }
+.group:first-of-type { margin-top: 0; }
+.group h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.list { list-style: none; margin: 0; padding: 0; }
+.task { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); }
+.task:first-child { border-top: 0; }
+.task input[type="checkbox"] { flex: 0 0 auto; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); }
+.task .body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.task .title { overflow-wrap: anywhere; }
+.task.done .title { color: var(--muted); text-decoration: line-through; }
+.task .meta { font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.chip { border-radius: 999px; padding: 0 8px; font-size: 12px; font-variant-numeric: tabular-nums; background: var(--rule); color: var(--muted); }
+.chip.soon { background: var(--warn-soft); color: var(--warn); }
+.chip.over { background: var(--bad-soft); color: var(--bad); }
+.grip { flex: 0 0 auto; width: 24px; height: 32px; margin: -4px 0 0 -8px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: grab; touch-action: none; font-size: 15px; letter-spacing: -2px; border-radius: 6px; }
+.grip:hover:not(:disabled) { color: var(--fg); background: var(--rule); }
+.grip:disabled { opacity: 0.3; cursor: default; }
+.task.dragging { position: relative; z-index: 2; background: var(--surface); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22); cursor: grabbing; }
+.task.shifting { transition: transform 0.15s ease; }
+body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) { .task.shifting { transition: none; } }
+.carry { border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.carry:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); }
+.carry:disabled { opacity: 0.5; cursor: not-allowed; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 16px; font-weight: 600; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.hint { margin: 0 0 8px; color: var(--muted); font-size: 13.5px; }
+.acts { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+.mv { border: 0; background: transparent; color: var(--muted); width: 32px; height: 32px; border-radius: 6px; font-size: 12px; }
+.mv:hover:not(:disabled) { background: var(--rule); color: var(--fg); }
+.mv:disabled { opacity: 0.3; cursor: default; }
+.del { flex: 0 0 auto; border: 0; background: transparent; color: var(--muted); font-size: 12.5px; padding: 4px 6px; border-radius: 6px; }
+.del:hover { color: var(--bad); }
+.del.armed { color: var(--bad); background: var(--bad-soft); }
+
+.add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.add input[type="text"] { flex: 1 1 160px; min-width: 0; }
+.add input { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 7px 10px; }
+.add input[type="date"] { flex: 0 1 150px; min-width: 0; }
+.add button { border: 0; background: var(--accent); color: var(--accent-fg); border-radius: 8px; padding: 7px 16px; font-weight: 600; }
+.add button:disabled, .add input:disabled { opacity: 0.55; cursor: not-allowed; }
+.empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
+details.donebox { margin-top: 14px; }
+details.donebox summary { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) { .day, .del, .add button { transition: background-color 0.15s, color 0.15s; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">갱갱의 다이어리</p>
+      <h1 id="dateTitle">&nbsp;</h1>
+      <p class="sub" id="dateSub"></p>
+    </div>
+    <div class="dday" id="dday" hidden></div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <nav class="week" aria-label="주간 날짜">
+    <button class="nav" id="prevWeek" type="button" aria-label="이전 주">‹</button>
+    <div class="days" id="days"></div>
+    <button class="nav" id="nextWeek" type="button" aria-label="다음 주">›</button>
+  </nav>
+
+  <div class="grid">
+    <aside class="panel" aria-labelledby="taskHead">
+      <div class="panel-head"><h2 id="taskHead">할 일</h2></div>
+      <div id="taskLists"></div>
+      <form class="add" id="addForm">
+        <label for="newTitle" hidden>새 할 일</label>
+        <input type="text" id="newTitle" placeholder="새 할 일" autocomplete="off" maxlength="120">
+        <label for="newDue" hidden>마감일</label>
+        <input type="date" id="newDue" title="마감일 (선택)" aria-label="마감일 (선택)">
+        <button type="submit" id="addBtn">추가</button>
+      </form>
+    </aside>
+
+    <section class="panel" aria-labelledby="entryHead">
+      <div class="panel-head">
+        <h2 id="entryHead">오늘의 기록</h2>
+        <span class="status" id="status" role="status"></span>
+      </div>
+      <label for="entryText" hidden>기록</label>
+      <textarea id="entryText" placeholder="오늘 한 일, 기억하고 싶은 것, 내일의 나에게 남길 말을 적어 보세요." spellcheck="false"></textarea>
+    </section>
+
+    <section class="panel" aria-labelledby="dailyHead">
+      <div class="panel-head"><h2 id="dailyHead">매일 할 일 관리</h2></div>
+      <p class="hint">여기에 넣은 할 일은 모든 날짜의 목록에 나타나고, 체크는 날짜마다 따로 기록돼요.</p>
+      <ul class="list" id="dailyList"></ul>
+      <form class="add" id="dailyForm">
+        <label for="newDaily" hidden>새 매일 할 일</label>
+        <input type="text" id="newDaily" placeholder="새 매일 할 일" autocomplete="off" maxlength="120">
+        <button type="submit" id="dailyAddBtn">추가</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="backupHead">
+      <div class="panel-head"><h2 id="backupHead">백업</h2></div>
+      <p class="hint">기록은 이 브라우저에만 저장돼요. 다른 기기로 옮기거나 브라우저 데이터를 지우기 전에 파일로 받아 두세요.</p>
+      <div class="btns">
+        <button type="button" class="btn" id="exportBtn">내보내기</button>
+        <button type="button" class="btn" id="importBtn">가져오기</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <p class="hint" id="backupMsg" role="status"></p>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  var WD = ['일', '월', '화', '수', '목', '금', '토'];
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function key(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parse(s) { var p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function addDays(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return key(d); }
+  function diffDays(a, b) { return Math.round((parse(a) - parse(b)) / 86400000); }
+  function md(s) { var d = parse(s); return (d.getMonth() + 1) + '/' + d.getDate() + ' (' + WD[d.getDay()] + ')'; }
+
+  function h(tag, props) {
+    var e = document.createElement(tag);
+    props = props || {};
+    Object.keys(props).forEach(function (k) {
+      var v = props[k];
+      if (k === 'class') e.className = v;
+      else if (k.indexOf('on') === 0) e.addEventListener(k.slice(2), v);
+      else if (v === true) e.setAttribute(k, '');
+      else if (v !== false && v != null) e.setAttribute(k, v);
+    });
+    (function add(list) {
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        if (c == null || c === false) continue;
+        if (Array.isArray(c)) add(c);
+        else e.append(c.nodeType ? c : document.createTextNode(String(c)));
+      }
+    })(Array.prototype.slice.call(arguments, 2));
+    return e;
+  }
+  function $(id) { return document.getElementById(id); }
+
+  var todayKey = key(new Date());
+  var sel = todayKey;
+  var tasks = [];
+  var entries = {};
+  var db = null;
+  var writable = true;
+  var loaded = false;
+  var pending = null;
+  var saveTimer = null;
+  var queue = Promise.resolve();
+  var armed = null;
+
+  var textEl = $('entryText');
+  var statusEl = $('status');
+
+  function setStatus(t) { statusEl.textContent = t; }
+
+  /* ---------- 기록 저장 ---------- */
+  function writeEntry(date, patch) {
+    if (!db || !writable) return;
+    var next = Object.assign({}, entries[date] || {}, patch, { updated: Date.now() });
+    entries[date] = next;
+    setStatus('저장 중…');
+    queue = queue.then(function () { return db.doc('entries/' + date).set(next); })
+      .then(function () { setStatus('저장됨'); renderWeek(); })
+      .catch(function () { setStatus('저장하지 못했어요. 잠시 후 다시 시도해 주세요.'); });
+  }
+  function flush() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    if (pending) { var p = pending; pending = null; writeEntry(p.date, { text: p.text }); }
+  }
+  textEl.addEventListener('input', function () {
+    pending = { date: sel, text: textEl.value };
+    setStatus('입력 중…');
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 800);
+  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flush(); });
+  window.addEventListener('pagehide', flush);
+
+  /* ---------- 날짜 이동 ---------- */
+  function select(k) { flush(); sel = k; renderAll(true); }
+  $('prevWeek').addEventListener('click', function () { select(addDays(sel, -7)); });
+  $('nextWeek').addEventListener('click', function () { select(addDays(sel, 7)); });
+
+  function weekStart(k) { var d = parse(k); var off = (d.getDay() + 6) % 7; return addDays(k, -off); }
+
+  function renderHead() {
+    var d = parse(sel);
+    $('dateTitle').textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + WD[d.getDay()] + '요일';
+    var rel = diffDays(sel, todayKey);
+    $('dateSub').textContent = d.getFullYear() + '년' + (rel === 0 ? ' · 오늘' : rel === -1 ? ' · 어제' : rel === 1 ? ' · 내일' : '');
+    $('entryHead').textContent = rel === 0 ? '오늘의 기록' : '이날의 기록';
+
+    var open = tasks.filter(function (t) { return !t.done && !t.daily && t.due && t.due >= todayKey; })
+      .sort(function (a, b) { return a.due < b.due ? -1 : 1; });
+    var box = $('dday');
+    if (open.length) {
+      var n = diffDays(open[0].due, todayKey);
+      box.hidden = false;
+      box.replaceChildren(h('b', {}, n === 0 ? 'D-DAY' : 'D-' + n), h('span', {}, '가장 가까운 마감 · ' + md(open[0].due)));
+    } else { box.hidden = true; }
+  }
+
+  function renderWeek() {
+    var start = weekStart(sel);
+    var box = $('days');
+    box.replaceChildren();
+    for (var i = 0; i < 7; i++) {
+      (function (k, i) {
+        var d = parse(k);
+        var cls = 'day' + (k === sel ? ' sel' : '') + (k === todayKey ? ' today' : '') + (d.getDay() === 0 ? ' sun' : '');
+        var e = entries[k];
+        var has = e && ((e.text && e.text.trim()) || (e.daily && Object.keys(e.daily).some(function (x) { return e.daily[x]; })));
+        box.append(h('button', { type: 'button', class: cls, 'aria-pressed': k === sel ? 'true' : 'false', 'aria-label': md(k), onclick: function () { select(k); } },
+          h('span', { class: 'wd' }, WD[d.getDay()]),
+          h('span', { class: 'dn' }, String(d.getDate())),
+          has ? h('span', { class: 'dot' }) : null));
+      })(addDays(start, i), i);
+    }
+  }
+
+  function renderEntry(force) {
+    var t = (entries[sel] && entries[sel].text) || '';
+    if (force || (!pending && document.activeElement !== textEl)) {
+      if (textEl.value !== t) textEl.value = t;
+    }
+  }
+
+  /* ---------- 할 일 ---------- */
+  function toggleDaily(id, on) {
+    var cur = Object.assign({}, (entries[sel] && entries[sel].daily) || {});
+    if (on) cur[id] = true; else delete cur[id];
+    writeEntry(sel, { daily: cur });
+    renderTasks();
+  }
+  function toggleDone(t, on) {
+    if (!db || !writable) return;
+    t.done = on;
+    renderTasks();
+    db.doc('tasks/' + t.id).update({ done: on }).catch(function () { setStatus('할 일을 저장하지 못했어요.'); });
+  }
+  function removeTask(t, btn) {
+    if (armed !== t.id) {
+      armed = t.id;
+      renderTasks();
+      setTimeout(function () { if (armed === t.id) { armed = null; renderTasks(); } }, 3000);
+      return;
+    }
+    armed = null;
+    if (!db || !writable) return;
+    db.doc('tasks/' + t.id).delete().catch(function () { setStatus('삭제하지 못했어요.'); });
+  }
+
+  function dueChip(due) {
+    var n = diffDays(due, todayKey);
+    var label = n < 0 ? 'D+' + (-n) + ' 지남' : n === 0 ? '오늘' : 'D-' + n;
+    return h('span', { class: 'chip' + (n < 0 ? ' over' : n <= 1 ? ' soon' : '') }, label);
+  }
+
+  var orderQueue = Promise.resolve();
+  function effOrder(t) { return t.order != null ? t.order : (t.created || 0); }
+  function taskDate(t) { return t.date || todayKey; }
+  function sortedTasks() {
+    return tasks.filter(function (t) { return t.daily || taskDate(t) === sel; })
+      .sort(function (a, b) { return effOrder(a) - effOrder(b); });
+  }
+
+  function carryOver(t) {
+    if (!db || !writable) return;
+    var next = addDays(sel, 1);
+    t.date = next;
+    renderTasks();
+    setStatus('다음 날(' + md(next) + ')로 옮겼어요');
+    orderQueue = orderQueue
+      .then(function () { return db.doc('tasks/' + t.id).update({ date: next }); })
+      .catch(function () { setStatus('이월하지 못했어요.'); });
+  }
+
+  function moveTask(t, dir) {
+    if (!db || !writable) return;
+    var list = sortedTasks();
+    var i = list.findIndex(function (x) { return x.id === t.id; });
+    var o = list[i + dir];
+    if (!o) return;
+    var a = effOrder(t), b = effOrder(o);
+    t.order = b; o.order = a;
+    renderTasks();
+    refocusGrip(t.id);
+    orderQueue = orderQueue
+      .then(function () { return db.doc('tasks/' + t.id).update({ order: b }); })
+      .then(function () { return db.doc('tasks/' + o.id).update({ order: a }); })
+      .catch(function () { setStatus('순서를 저장하지 못했어요.'); });
+  }
+
+  var dragging = false;
+  var renderLater = false;
+
+  function refocusGrip(id) {
+    var g = document.querySelector('[data-grip="' + id + '"]');
+    if (g) g.focus();
+  }
+
+  function reorder(t, newIndex) {
+    if (!db || !writable) return;
+    var rest = sortedTasks().filter(function (x) { return x.id !== t.id; });
+    var prev = rest[newIndex - 1], next = rest[newIndex];
+    var v = prev && next ? (effOrder(prev) + effOrder(next)) / 2 : prev ? effOrder(prev) + 1000 : effOrder(next) - 1000;
+    t.order = v;
+    renderTasks();
+    orderQueue = orderQueue
+      .then(function () { return db.doc('tasks/' + t.id).update({ order: v }); })
+      .catch(function () { setStatus('순서를 저장하지 못했어요.'); });
+  }
+
+  function startDrag(ev, li, t, grip) {
+    if (!writable || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+    ev.preventDefault();
+    var rows = Array.prototype.slice.call(li.parentNode.children);
+    var from = rows.indexOf(li);
+    var rects = rows.map(function (r) { return r.getBoundingClientRect(); });
+    var startY = ev.clientY, hgt = rects[from].height, target = from;
+    var minDy = rects[0].top - rects[from].top, maxDy = rects[rows.length - 1].top - rects[from].top;
+    dragging = true;
+    document.body.classList.add('is-dragging');
+    li.classList.add('dragging');
+    rows.forEach(function (r, i) { if (i !== from) r.classList.add('shifting'); });
+    try { grip.setPointerCapture(ev.pointerId); } catch (e) {}
+
+    function move(e) {
+      var dy = Math.max(minDy, Math.min(maxDy, e.clientY - startY));
+      var center = rects[from].top + hgt / 2 + dy;
+      var n = 0;
+      rows.forEach(function (r, i) { if (i !== from && rects[i].top + rects[i].height / 2 < center) n++; });
+      if (dy <= minDy) n = 0;
+      else if (dy >= maxDy) n = rows.length - 1;
+      target = n;
+      li.style.transform = 'translateY(' + dy + 'px)';
+      rows.forEach(function (r, i) {
+        if (i === from) return;
+        var shift = 0;
+        if (from < target && i > from && i <= target) shift = -hgt;
+        else if (from > target && i >= target && i < from) shift = hgt;
+        r.style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+      });
+    }
+    function end() {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', end);
+      grip.removeEventListener('pointercancel', end);
+      dragging = false;
+      document.body.classList.remove('is-dragging');
+      rows.forEach(function (r) { r.classList.remove('dragging', 'shifting'); r.style.transform = ''; });
+      if (target !== from) reorder(t, target); else renderTasks();
+    }
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+  }
+
+  function taskRow(t, idx, total) {
+    var daily = !!t.daily;
+    var checked = daily ? !!(entries[sel] && entries[sel].daily && entries[sel].daily[t.id]) : !!t.done;
+    var meta = [];
+    if (daily) {
+      var start = weekStart(sel), c = 0;
+      for (var i = 0; i < 7; i++) { var e = entries[addDays(start, i)]; if (e && e.daily && e.daily[t.id]) c++; }
+      meta.push(h('span', { class: 'chip' }, '매일'));
+      meta.push('이번 주 ' + c + '/7');
+    } else if (t.due) {
+      if (!t.done) meta.push(dueChip(t.due));
+      meta.push(md(t.due));
+    }
+    var cb = h('input', { type: 'checkbox', checked: checked, disabled: !writable, 'aria-label': t.title + ' 완료',
+      onchange: function (ev) { daily ? toggleDaily(t.id, ev.target.checked) : toggleDone(t, ev.target.checked); } });
+    cb.checked = checked;
+    var grip = h('button', { type: 'button', class: 'grip', 'data-grip': t.id, disabled: !writable,
+      'aria-label': t.title + ' 순서 바꾸기. 끌어서 옮기거나 위·아래 방향키를 누르세요.',
+      onkeydown: function (ev) {
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); moveTask(t, -1); }
+        else if (ev.key === 'ArrowDown') { ev.preventDefault(); moveTask(t, 1); }
+      } }, '⋮⋮');
+    var del = h('button', { type: 'button', class: 'del' + (armed === t.id ? ' armed' : ''), disabled: !writable, onclick: function (ev) { removeTask(t, ev.target); } }, armed === t.id ? '정말 삭제' : '삭제');
+    var carry = (!daily && !checked) ? h('button', { type: 'button', class: 'carry', disabled: !writable,
+      'aria-label': t.title + ' 내일로 이월', title: '내일로 이월', onclick: function () { carryOver(t); } }, '→ 내일') : null;
+    var li = h('li', { class: 'task' + (checked ? ' done' : ''), 'data-id': t.id }, grip, cb,
+      h('div', { class: 'body' }, h('span', { class: 'title' }, t.title), meta.length ? h('span', { class: 'meta' }, meta) : null),
+      h('div', { class: 'acts' }, carry, del));
+    grip.addEventListener('pointerdown', function (ev) { startDrag(ev, li, t, grip); });
+    return li;
+  }
+
+  function renderTasks() {
+    if (dragging) { renderLater = true; return; }
+    renderLater = false;
+    renderDaily();
+    $('taskHead').textContent = sel === todayKey ? '오늘 할 일' : md(sel) + ' 할 일';
+    var box = $('taskLists');
+    box.replaceChildren();
+    if (!loaded) { box.append(h('p', { class: 'empty' }, '불러오는 중…')); return; }
+    var list = sortedTasks();
+    if (!list.length) {
+      box.append(h('p', { class: 'empty' }, '이 날짜에 계획한 할 일이 없어요. 아래에서 추가하거나 전날 할 일을 이월해 보세요.'));
+      return;
+    }
+    box.append(h('ul', { class: 'list' }, list.map(function (t, i) { return taskRow(t, i, list.length); })));
+  }
+
+  $('addForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var title = $('newTitle').value.trim();
+    if (!title || !db || !writable) return;
+    var due = $('newDue').value || null;
+    $('newTitle').value = '';
+    $('newDue').value = '';
+    db.collection('tasks').add({ title: title, due: due, daily: false, done: false, created: Date.now(), order: Date.now(), date: sel })
+      .catch(function () { setStatus('할 일을 추가하지 못했어요.'); });
+  });
+
+  function renderDaily() {
+    var box = $('dailyList');
+    box.replaceChildren();
+    if (!loaded) { box.append(h('li', { class: 'empty' }, '불러오는 중…')); return; }
+    var list = tasks.filter(function (t) { return t.daily; }).sort(function (a, b) { return effOrder(a) - effOrder(b); });
+    if (!list.length) { box.append(h('li', { class: 'empty' }, '매일 하는 일이 아직 없어요. 달리기처럼 날마다 반복할 일을 추가해 보세요.')); return; }
+    list.forEach(function (t) {
+      var del = h('button', { type: 'button', class: 'del' + (armed === t.id ? ' armed' : ''), disabled: !writable,
+        'aria-label': t.title + ' 삭제', onclick: function () { removeTask(t); } }, armed === t.id ? '정말 삭제' : '삭제');
+      box.append(h('li', { class: 'task' }, h('div', { class: 'body' }, h('span', { class: 'title' }, t.title)), h('div', { class: 'acts' }, del)));
+    });
+  }
+
+  $('dailyForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var title = $('newDaily').value.trim();
+    if (!title || !db || !writable) return;
+    $('newDaily').value = '';
+    db.collection('tasks').add({ title: title, due: null, daily: true, done: false, created: Date.now(), order: Date.now() })
+      .catch(function () { setStatus('매일 할 일을 추가하지 못했어요.'); });
+  });
+
+  function renderAll(force) { renderHead(); renderWeek(); renderEntry(force); renderTasks(); }
+
+  function lock(message) {
+    writable = false;
+    var b = $('banner');
+    b.hidden = false;
+    b.textContent = message;
+    textEl.disabled = true;
+    $('newTitle').disabled = true;
+    $('newDue').disabled = true;
+    $('addBtn').disabled = true;
+    $('newDaily').disabled = true;
+    $('dailyAddBtn').disabled = true;
+    renderTasks();
+  }
+
+  renderAll(true);
+
+  /* ---------- 저장소: 이 브라우저의 localStorage ---------- */
+  var KEY = 'gaenggaeng-diary-v1';
+  var SEED = {
+    tasks: {
+      '52kgk10sx1fty9wl92r3': { created: 1794969535684, daily: true, done: false, due: null, order: 1779201408196, title: '달리기 4km' },
+      'dz5zen0wjslrygs6uya5': { created: 1794969157490, daily: false, date: '2026-11-18', done: false, due: null, order: 1779201410446, title: '화방 컨택' },
+      'edf3i9kz79jbquet6mgo': { created: 1794968836266, daily: false, date: '2026-11-18', done: false, due: '2026-11-20', order: 1779201409196, title: '회계원리 시험 공부' },
+      'z7qshn8m5288wab0ud00': { created: 1794968822142, daily: false, date: '2026-11-18', done: true, due: '2026-11-19', order: 1779201410196, title: '일본어 공부' }
+    },
+    entries: {}
+  };
+
+  function makeLocalDb() {
+    var store = null;
+    try { var raw = localStorage.getItem(KEY); if (raw) store = JSON.parse(raw); } catch (e) {}
+    if (!store || typeof store.tasks !== 'object' || typeof store.entries !== 'object') store = JSON.parse(JSON.stringify(SEED));
+    var subs = { tasks: [], entries: [] };
+    var warned = false;
+    function save() {
+      try { localStorage.setItem(KEY, JSON.stringify(store)); }
+      catch (e) {
+        if (!warned) {
+          warned = true;
+          var b = $('banner'); b.hidden = false;
+          b.textContent = '이 브라우저에서는 저장할 수 없어요. 지금 화면에서만 유지되니, 아래 백업 내보내기로 파일을 받아 두세요.';
+        }
+      }
+    }
+    function clone(x) { return JSON.parse(JSON.stringify(x)); }
+    function snap(col) {
+      var ids = Object.keys(store[col]).sort();
+      return { docs: ids.map(function (id) { var d = store[col][id]; return { id: id, exists: true, data: function () { return d; } }; }), metadata: { fromCache: false } };
+    }
+    function notify(col) { subs[col].forEach(function (f) { f(snap(col)); }); }
+    function docRef(col, id) {
+      return {
+        set: function (d) { store[col][id] = clone(d); save(); notify(col); return Promise.resolve(); },
+        update: function (d) {
+          if (!store[col][id]) return Promise.reject(new Error('missing'));
+          Object.assign(store[col][id], clone(d)); save(); notify(col); return Promise.resolve();
+        },
+        delete: function () { delete store[col][id]; save(); notify(col); return Promise.resolve(); }
+      };
+    }
+    window.addEventListener('storage', function (e) {
+      if (e.key !== KEY || !e.newValue) return;
+      try { store = JSON.parse(e.newValue); } catch (x) { return; }
+      notify('tasks'); notify('entries');
+    });
+    save();
+    return {
+      collection: function (col) {
+        return {
+          onSnapshot: function (next) { subs[col].push(next); setTimeout(function () { next(snap(col)); }, 0); return function () {}; },
+          add: function (d) { var id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); return docRef(col, id).set(d); }
+        };
+      },
+      doc: function (path) { var p = path.split('/'); return docRef(p[0], p[1]); },
+      dump: function () { return clone(store); },
+      load: function (data) {
+        store = { tasks: clone(data.tasks || {}), entries: clone(data.entries || {}) };
+        save(); notify('tasks'); notify('entries');
+      }
+    };
+  }
+
+  db = makeLocalDb();
+  db.collection('tasks').onSnapshot(function (snap) {
+    tasks = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    loaded = true; renderHead(); renderTasks();
+  });
+  db.collection('entries').onSnapshot(function (snap) {
+    var m = {};
+    snap.docs.forEach(function (d) { m[d.id] = d.data(); });
+    entries = m;
+    renderWeek(); renderEntry(false); renderTasks();
+  });
+
+  /* ---------- 백업 ---------- */
+  var pendingImport = null;
+  function backupMsg(node) { var box = $('backupMsg'); box.replaceChildren(); if (node) box.append(node); }
+  $('exportBtn').addEventListener('click', function () {
+    var d = db.dump();
+    var blob = new Blob([JSON.stringify({ app: 'gaenggaeng-diary', version: 1, exportedAt: new Date().toISOString(), tasks: d.tasks, entries: d.entries }, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = h('a', { href: url, download: 'diary-backup-' + todayKey + '.json' });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    backupMsg('백업 파일을 내려받았어요.');
+  });
+  $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+  $('importFile').addEventListener('change', function (ev) {
+    var f = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var d = JSON.parse(String(r.result));
+        if (!d || typeof d.tasks !== 'object' || typeof d.entries !== 'object') throw new Error('bad');
+        pendingImport = d;
+        backupMsg(h('span', {}, '할 일 ' + Object.keys(d.tasks).length + '개, 기록 ' + Object.keys(d.entries).length + '일치가 들어 있어요. 지금 내용을 이 파일로 바꿀까요? ',
+          h('button', { type: 'button', class: 'btn', onclick: function () { db.load(pendingImport); pendingImport = null; backupMsg('불러왔어요.'); renderAll(true); } }, '바꾸기'), ' ',
+          h('button', { type: 'button', class: 'btn', onclick: function () { pendingImport = null; backupMsg('취소했어요.'); } }, '취소')));
+      } catch (e) { backupMsg('백업 파일 형식이 맞지 않아요.'); }
+    };
+    r.readAsText(f);
+  });
+})();
+</script>
+</body>
+</html>
